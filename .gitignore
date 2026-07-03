@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/inventory.db
+data/inventory.db.wal
+.DS_Store
+.ipynb_checkpoints/
+*.db
