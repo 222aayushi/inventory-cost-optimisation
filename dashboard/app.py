@@ -212,6 +212,20 @@ else:
     st.sidebar.error("Error: Backend formulation files not found, and FastAPI server is offline.")
     st.stop()
 
+# Fetch all SKUs helper
+def get_all_skus_data():
+    if mode == "API":
+        try:
+            res = requests.get(f"{API_URL}/skus")
+            if res.status_code == 200:
+                return pd.DataFrame(res.json())
+        except Exception:
+            pass
+        return pd.DataFrame()
+    elif BACKEND_AVAILABLE:
+        return load_skus()
+    return pd.DataFrame()
+
 # Title Banner
 st.markdown(
     "<div style='margin-bottom: 20px;'>"
@@ -577,45 +591,51 @@ with tab3:
         with col_d1:
             st.markdown(f"#### SKU {selected_sku} Peer Cost Comparison")
             
-            # Fetch peer group details
-            skus_df = load_skus()
-            peer_group = skus_df[skus_df["style_group"] == sku_detail["style_group"]]
-            
-            # Create distribution chart
-            fig_hist = go.Figure()
-            fig_hist.add_trace(go.Bar(
-                x=peer_group["sku_id"],
-                y=peer_group["unit_cost"],
-                name="Comparable SKU Unit Cost",
-                marker_color="#8C8C96",
-                opacity=0.6
-            ))
-            # Highlight selected SKU
-            fig_hist.add_trace(go.Bar(
-                x=[selected_sku],
-                y=[sku_detail["unit_cost"]],
-                name="Anomalous SKU",
-                marker_color="#F9D3D8"
-            ))
-            # Add line for peer group median
-            fig_hist.add_hline(
-                y=sku_detail["median"], 
-                line_dash="dash", 
-                line_color="#E6C17A",
-                annotation_text=f"Peer Median (${sku_detail['median']:.2f})",
-                annotation_position="bottom right"
-            )
-            fig_hist.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font_color='#F8F9FA',
-                yaxis_title="Unit Cost ($)",
-                xaxis_title="SKU list in Style Group",
-                yaxis=dict(gridcolor='#1C1C1E'),
-                height=350,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig_hist, use_container_width=True)
+            try:
+                # Fetch peer group details
+                skus_df = get_all_skus_data()
+                if not skus_df.empty:
+                    peer_group = skus_df[skus_df["style_group"] == sku_detail["style_group"]]
+                    
+                    # Create distribution chart
+                    fig_hist = go.Figure()
+                    fig_hist.add_trace(go.Bar(
+                        x=peer_group["sku_id"],
+                        y=peer_group["unit_cost"],
+                        name="Comparable SKU Unit Cost",
+                        marker_color="#8C8C96",
+                        opacity=0.6
+                    ))
+                    # Highlight selected SKU
+                    fig_hist.add_trace(go.Bar(
+                        x=[selected_sku],
+                        y=[sku_detail["unit_cost"]],
+                        name="Anomalous SKU",
+                        marker_color="#F9D3D8"
+                    ))
+                    # Add line for peer group median
+                    fig_hist.add_hline(
+                        y=sku_detail["median"], 
+                        line_dash="dash", 
+                        line_color="#E6C17A",
+                        annotation_text=f"Peer Median (${sku_detail['median']:.2f})",
+                        annotation_position="bottom right"
+                    )
+                    fig_hist.update_layout(
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        font_color='#F8F9FA',
+                        yaxis_title="Unit Cost ($)",
+                        xaxis_title="SKU list in Style Group",
+                        yaxis=dict(gridcolor='#1C1C1E'),
+                        height=350,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    st.plotly_chart(fig_hist, use_container_width=True)
+                else:
+                    st.write("Could not retrieve peer group details (database empty).")
+            except Exception as e:
+                st.info("Peer cost comparison chart is temporarily unavailable.")
             
         with col_d2:
             st.markdown("#### 💬 Buyer Negotiation Explanation")

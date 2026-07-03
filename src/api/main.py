@@ -334,3 +334,14 @@ def get_history():
         return history_df_copy.to_dict(orient="records")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch execution history: {str(e)}")
+
+@app.get("/skus")
+def get_all_skus():
+    """
+    Exposes the SKU database master records.
+    """
+    try:
+        skus_df = load_skus()
+        return skus_df.to_dict(orient="records")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch SKUs: {str(e)}")
