@@ -9,16 +9,16 @@ def clean_and_anomalous_skus():
     Creates a small controlled dataset of SKUs within one style group
     with one explicitly injected cost anomaly.
     """
-    style_group = "Leather Footwear"
+    style_group = "Leather Activewear"
     skus = [
         # Normal peer group SKUs (median cost should be $50.0)
-        {"sku_id": "SKU-1", "style_group": style_group, "category": "Footwear", "fabric": "Leather", "supplier_id": "S1", "unit_cost": 49.0, "mean_weekly_demand": 100},
-        {"sku_id": "SKU-2", "style_group": style_group, "category": "Footwear", "fabric": "Leather", "supplier_id": "S1", "unit_cost": 50.0, "mean_weekly_demand": 100},
-        {"sku_id": "SKU-3", "style_group": style_group, "category": "Footwear", "fabric": "Leather", "supplier_id": "S1", "unit_cost": 51.0, "mean_weekly_demand": 100},
-        {"sku_id": "SKU-4", "style_group": style_group, "category": "Footwear", "fabric": "Leather", "supplier_id": "S1", "unit_cost": 50.0, "mean_weekly_demand": 100},
+        {"sku_id": "SKU-1", "style_group": style_group, "category": "Activewear", "fabric": "Leather", "supplier_id": "S1", "unit_cost": 49.0, "mean_weekly_demand": 100},
+        {"sku_id": "SKU-2", "style_group": style_group, "category": "Activewear", "fabric": "Leather", "supplier_id": "S1", "unit_cost": 50.0, "mean_weekly_demand": 100},
+        {"sku_id": "SKU-3", "style_group": style_group, "category": "Activewear", "fabric": "Leather", "supplier_id": "S1", "unit_cost": 51.0, "mean_weekly_demand": 100},
+        {"sku_id": "SKU-4", "style_group": style_group, "category": "Activewear", "fabric": "Leather", "supplier_id": "S1", "unit_cost": 50.0, "mean_weekly_demand": 100},
         
         # Outlier cost anomaly (deviates significantly from median)
-        {"sku_id": "SKU-ANOMALY", "style_group": style_group, "category": "Footwear", "fabric": "Leather", "supplier_id": "S2", "unit_cost": 95.0, "mean_weekly_demand": 200}
+        {"sku_id": "SKU-ANOMALY", "style_group": style_group, "category": "Activewear", "fabric": "Leather", "supplier_id": "S2", "unit_cost": 95.0, "mean_weekly_demand": 200}
     ]
     return pd.DataFrame(skus)
 
@@ -64,5 +64,5 @@ def test_explanation_formatting(clean_and_anomalous_skus):
     
     assert "95.00" in explanation
     assert "50.00" in explanation
-    assert "Leather Footwear" in explanation
+    assert "Leather Activewear" in explanation
     assert "9,000.00" in explanation

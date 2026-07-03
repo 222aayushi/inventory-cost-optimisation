@@ -10,9 +10,9 @@ def mock_dashboard_environment():
     mock_skus = pd.DataFrame([
         {
             "sku_id": f"SKU-{i}",
-            "category": "Tops",
+            "category": "Structured Tops",
             "fabric": "Cotton",
-            "style_group": "Cotton Tops",
+            "style_group": "Cotton Structured Tops",
             "unit_cost": 25.0,
             "unit_volume": 0.02,
             "min_order_quantity": 50,
@@ -82,16 +82,16 @@ def mock_dashboard_environment():
         "anomalies": patch("src.anomaly_detection.detector.detect_cost_anomalies", return_value=pd.DataFrame([
             {
                 "sku_id": "SKU-0",
-                "category": "Tops",
+                "category": "Structured Tops",
                 "fabric": "Cotton",
-                "style_group": "Cotton Tops",
+                "style_group": "Cotton Structured Tops",
                 "supplier_id": "SUPPLIER_A",
                 "unit_cost": 85.0,
                 "median": 25.0,
                 "pct_deviation": 240.0,
                 "order_volume": 50.0,
                 "potential_savings": 3000.0,
-                "explanation": "Cost outlier in Cotton Tops group."
+                "explanation": "Cost outlier in Cotton Structured Tops group."
             }
         ]))
     }
@@ -146,16 +146,16 @@ def test_dashboard_tabs_smoke(mock_dashboard_environment):
         mock_anomalies_res.json.return_value = [
             {
                 "sku_id": "SKU-0",
-                "category": "Tops",
+                "category": "Structured Tops",
                 "fabric": "Cotton",
-                "style_group": "Cotton Tops",
+                "style_group": "Cotton Structured Tops",
                 "supplier_id": "SUPPLIER_A",
                 "unit_cost": 85.0,
                 "median": 25.0,
                 "pct_deviation": 240.0,
                 "order_volume": 50.0,
                 "potential_savings": 3000.0,
-                "explanation": "Cost outlier in Cotton Tops group."
+                "explanation": "Cost outlier in Cotton Structured Tops group."
             }
         ]
         
@@ -193,9 +193,9 @@ def test_dashboard_tabs_smoke(mock_dashboard_environment):
             "recommendations": [
                 {
                     "sku_id": f"SKU-{i}",
-                    "category": "Tops",
+                    "category": "Structured Tops",
                     "fabric": "Cotton",
-                    "style_group": "Cotton Tops",
+                    "style_group": "Cotton Structured Tops",
                     "unit_cost": 25.0,
                     "current_inventory": 100,
                     "recommended_order_qty": 50.0,

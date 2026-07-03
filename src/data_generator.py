@@ -8,15 +8,15 @@ def generate_sku_dataset(num_skus: int = 1000, seed: int = 42) -> pd.DataFrame:
     """
     np.random.seed(seed)
     
-    categories = ["Tops", "Bottoms", "Outerwear", "Footwear"]
+    categories = ["Structured Tops", "Basics", "Loungewear", "Activewear"]
     fabrics = ["Cotton", "Polyester", "Wool", "Denim", "Leather"]
     
     # Base costs and volume parameters per category
     cat_params = {
-        "Tops": {"base_cost": 20.0, "unit_volume": 0.01, "min_demand": 300, "max_demand": 1000},
-        "Bottoms": {"base_cost": 35.0, "unit_volume": 0.02, "min_demand": 200, "max_demand": 800},
-        "Outerwear": {"base_cost": 75.0, "unit_volume": 0.05, "min_demand": 100, "max_demand": 400},
-        "Footwear": {"base_cost": 60.0, "unit_volume": 0.03, "min_demand": 150, "max_demand": 600}
+        "Structured Tops": {"base_cost": 20.0, "unit_volume": 0.01, "min_demand": 300, "max_demand": 1000},
+        "Basics": {"base_cost": 35.0, "unit_volume": 0.02, "min_demand": 200, "max_demand": 800},
+        "Loungewear": {"base_cost": 75.0, "unit_volume": 0.05, "min_demand": 100, "max_demand": 400},
+        "Activewear": {"base_cost": 60.0, "unit_volume": 0.03, "min_demand": 150, "max_demand": 600}
     }
     
     # Cost premiums per fabric type
