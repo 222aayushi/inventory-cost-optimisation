@@ -46,7 +46,7 @@ For this implementation, we selected **PuLP** as the primary framework and provi
 In a large retail catalog with thousands of active styles, colors, and fabrics, buyers negotiate contract prices with multiple suppliers. Due to fragmented vendor negotiations, data-entry errors, or legacy contracts, comparable items often have different prices.
 
 ### How the Anomaly Detector Works:
-1. **Comparable Peer Grouping**: We group SKUs by `style_group` (fabric + category combination, e.g., *"Lace Bra"*, *"Silk Sleepwear"*). This ensures we compare "apples to apples" (fabric type is the primary cost driver in apparel).
+1. **Comparable Peer Grouping**: We group SKUs by `style_group` (material + category combination, e.g., *"Leather Footwear"*, *"Wool Outerwear"*). This ensures we compare "apples to apples" (material type is the primary cost driver in apparel).
 2. **Robust Statistics (Median & IQR)**: We compute the peer group median and Interquartile Range (IQR). We avoid mean and standard deviation because they are heavily influenced by the outliers we are trying to find.
 3. **The Threshold (Tukey's Fence)**:
    $$\text{Threshold} = \text{Median} + 1.5 \times \text{IQR}$$

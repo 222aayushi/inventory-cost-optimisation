@@ -432,8 +432,18 @@ with tab1:
 
     # Historical solver run status table
     st.markdown("### 📜 Solver Execution History (MLOps Log)")
-    if mode == "API" or BACKEND_AVAILABLE:
-        runs_history = OptimizationTracker.get_history()
+    try:
+        if mode == "API":
+            res = requests.get(f"{API_URL}/history")
+            if res.status_code == 200:
+                runs_history = pd.DataFrame(res.json())
+            else:
+                runs_history = pd.DataFrame()
+        elif BACKEND_AVAILABLE:
+            runs_history = OptimizationTracker.get_history()
+        else:
+            runs_history = pd.DataFrame()
+            
         if not runs_history.empty:
             runs_history["timestamp"] = pd.to_datetime(runs_history["timestamp"])
             runs_history_disp = runs_history.rename(columns={
@@ -454,6 +464,8 @@ with tab1:
             )
         else:
             st.write("No historical runs found.")
+    except Exception as e:
+        st.info("Execution history is temporarily unavailable (Offline).")
 
 # ----------------- TAB 2: OPTIMIZATION ROOM -----------------
 with tab2:

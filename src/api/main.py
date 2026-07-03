@@ -319,3 +319,18 @@ def run_scenario(req: ScenarioRequest):
         budget_explanation=result["budget_explanation"],
         capacity_explanation=result["capacity_explanation"]
     )
+
+@app.get("/history")
+def get_history():
+    """
+    Exposes the optimization run logging history.
+    """
+    try:
+        history_df = OptimizationTracker.get_history()
+        if history_df.empty:
+            return []
+        history_df_copy = history_df.copy()
+        history_df_copy["timestamp"] = history_df_copy["timestamp"].astype(str)
+        return history_df_copy.to_dict(orient="records")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch execution history: {str(e)}")
