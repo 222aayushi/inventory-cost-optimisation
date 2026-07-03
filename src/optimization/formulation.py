@@ -27,6 +27,75 @@ def generate_demand_scenarios(
         
     return scenarios
 
+def diagnose_infeasibility(
+    skus_df: pd.DataFrame,
+    budget_cap: float,
+    capacity_cap: float,
+    service_level_target: float,
+    num_scenarios: int = 15
+) -> str:
+    """
+    Diagnoses which constraint causes solver infeasibility by running relaxed continuous sub-problems.
+    """
+    sku_ids = skus_df["sku_id"].tolist()
+    num_skus = len(sku_ids)
+    demand_scenarios = generate_demand_scenarios(skus_df, num_scenarios)
+    
+    prob = pulp.LpProblem("Infeasibility_Diagnostic_LP", pulp.LpMinimize)
+    
+    x = pulp.LpVariable.dicts("order_qty", sku_ids, lowBound=0, cat=pulp.LpContinuous)
+    y = pulp.LpVariable.dicts("reorder", sku_ids, lowBound=0, upBound=1, cat=pulp.LpContinuous)
+    
+    I_vars = {}
+    V_vars = {}
+    for i in range(num_skus):
+        sku_id = sku_ids[i]
+        for s in range(num_scenarios):
+            I_vars[(sku_id, s)] = pulp.LpVariable(f"I_{sku_id}_{s}", lowBound=0, cat=pulp.LpContinuous)
+            V_vars[(sku_id, s)] = pulp.LpVariable(f"V_{sku_id}_{s}", lowBound=0, cat=pulp.LpContinuous)
+            
+    prob += pulp.lpSum(skus_df.loc[i, "unit_cost"] * x[sku_id] for i, sku_id in enumerate(sku_ids))
+    
+    supplier_capacity = 80000.0
+    suppliers = skus_df["supplier_id"].unique()
+    for supplier in suppliers:
+        supplier_indices = skus_df[skus_df["supplier_id"] == supplier].index
+        prob += pulp.lpSum(x[sku_ids[idx]] for idx in supplier_indices) <= supplier_capacity
+        
+    for i in range(num_skus):
+        sku_id = sku_ids[i]
+        moq = skus_df.loc[i, "min_order_quantity"]
+        current_stock = skus_df.loc[i, "current_inventory"]
+        mean_dem = skus_df.loc[i, "mean_weekly_demand"]
+        
+        M = max(5 * mean_dem, moq + 1)
+        prob += x[sku_id] >= moq * y[sku_id]
+        prob += x[sku_id] <= M * y[sku_id]
+        
+        for s in range(num_scenarios):
+            dem = demand_scenarios[i, s]
+            prob += current_stock + x[sku_id] - dem == I_vars[(sku_id, s)] - V_vars[(sku_id, s)]
+            
+    total_demand = skus_df["mean_weekly_demand"].sum()
+    prob += (pulp.lpSum(V_vars[(sku_id, s)] for sku_id in sku_ids for s in range(num_scenarios)) / num_scenarios) <= (1.0 - service_level_target) * total_demand
+    
+    solver = pulp.PULP_CBC_CMD(msg=False)
+    status_code = prob.solve(solver)
+    status = pulp.LpStatus[status_code]
+    
+    if status == "Optimal":
+        min_cost = sum(x[sku_id].varValue * skus_df.loc[i, "unit_cost"] for i, sku_id in enumerate(sku_ids))
+        min_volume = sum(x[sku_id].varValue * skus_df.loc[i, "unit_volume"] for i, sku_id in enumerate(sku_ids))
+        
+        if min_cost > budget_cap:
+            return f"Budget constraint infeasible: The minimum cost to satisfy your target service level of {service_level_target*100:.0f}% is ${min_cost:,.2f}, which exceeds your budget cap of ${budget_cap:,.2f}. Please increase the budget."
+        elif min_volume > capacity_cap:
+            return f"Warehouse capacity constraint infeasible: The minimum storage volume to satisfy your target service level of {service_level_target*100:.0f}% is {min_volume:.2f} m³, which exceeds your capacity cap of {capacity_cap:.2f} m³. Please increase the warehouse space."
+        else:
+            return f"Constraint interaction infeasible: Both budget and warehouse capacity are too tight to meet the target service level of {service_level_target*100:.1f}% simultaneously. Please relax multiple constraints."
+    else:
+        return f"Service level constraint infeasible: The target service level of {service_level_target*100:.1f}% cannot be satisfied because of supplier capacity limits or MOQ bounds. Please lower the service level target."
+
 def solve_inventory_mip(
     skus_df: pd.DataFrame,
     budget_cap: float,
@@ -114,9 +183,10 @@ def solve_inventory_mip(
             dem = demand_scenarios[i, s]
             prob += current_stock + x[sku_id] - dem == I_vars[(sku_id, s)] - V_vars[(sku_id, s)], f"Inv_Bal_{sku_id}_{s}"
             
-        # Service level target (Fill Rate / expected shortfall cap)
-        # Expected shortfall <= (1 - target) * mean demand
-        prob += (pulp.lpSum(V_vars[(sku_id, s)] for s in range(num_scenarios)) / num_scenarios) <= (1.0 - service_level_target) * mean_dem, f"Service_Level_{sku_id}"
+    # 5. Aggregate Service Level constraint (instead of per-SKU)
+    # Total expected shortfall <= (1 - target) * Total expected demand
+    total_demand = skus_df["mean_weekly_demand"].sum()
+    prob += (pulp.lpSum(V_vars[(sku_id, s)] for sku_id in sku_ids for s in range(num_scenarios)) / num_scenarios) <= (1.0 - service_level_target) * total_demand, "Aggregate_Service_Level"
         
     # Solve
     if solver_name == "PULP_CBC_CMD":
@@ -168,7 +238,10 @@ def solve_inventory_mip(
         "gap": 0.0 # CBC doesn't expose gap easily without log parsing
     }
     
-
+    if status == "Infeasible":
+        reason = diagnose_infeasibility(skus_df, budget_cap, capacity_cap, service_level_target, num_scenarios)
+        diagnostics["error_message"] = reason
+        
     return status, objective_val, recs_df, diagnostics
 
 def solve_inventory_lp_relaxation(
@@ -246,9 +319,10 @@ def solve_inventory_lp_relaxation(
             dem = demand_scenarios[i, s]
             prob += current_stock + x[sku_id] - dem == I_vars[(sku_id, s)] - V_vars[(sku_id, s)], f"Inv_Bal_{sku_id}_{s}"
             
-        # Service level target (Fill Rate / expected shortfall cap)
-        # Expected shortfall <= (1 - target) * mean demand
-        prob += (pulp.lpSum(V_vars[(sku_id, s)] for s in range(num_scenarios)) / num_scenarios) <= (1.0 - service_level_target) * mean_dem, f"Service_Level_{sku_id}"
+    # 5. Aggregate Service Level constraint (instead of per-SKU)
+    # Total expected shortfall <= (1 - target) * Total expected demand
+    total_demand = skus_df["mean_weekly_demand"].sum()
+    prob += (pulp.lpSum(V_vars[(sku_id, s)] for sku_id in sku_ids for s in range(num_scenarios)) / num_scenarios) <= (1.0 - service_level_target) * total_demand, "Aggregate_Service_Level"
         
     solver = pulp.PULP_CBC_CMD(msg=False)
     status_code = prob.solve(solver)
@@ -302,7 +376,10 @@ def solve_inventory_lp_relaxation(
         "num_constraints": len(prob.constraints)
     }
     
-
+    if status == "Infeasible":
+        reason = diagnose_infeasibility(skus_df, budget_cap, capacity_cap, service_level_target, num_scenarios)
+        diagnostics["error_message"] = reason
+        
     return status, objective_val, recs_df, diagnostics, duals
 
 def solve_inventory_scipy_lp(
@@ -414,18 +491,16 @@ def solve_inventory_scipy_lp(
         A_ub.append(row_u)
         b_ub.append(0.0)
         
-    # 5. Service level constraint per SKU:
-    # sum_s(V_i,s) / S <= (1 - target) * mean_demand
+    # 5. Aggregate Service Level constraint:
+    # sum_{i,s} (V_i,s) / S <= (1 - target) * sum_i(mean_demand)
+    total_demand = skus_df["mean_weekly_demand"].sum()
+    row = np.zeros(num_vars)
     for i in range(N):
-        target = skus_df.loc[i, "service_level_target"] # default 0.95
-        mean_dem = skus_df.loc[i, "mean_weekly_demand"]
-        
-        row = np.zeros(num_vars)
         for s in range(S):
             V_idx = 2 * N + N * S + i * S + s
             row[V_idx] = 1.0 / S
-        A_ub.append(row)
-        b_ub.append((1.0 - service_level_target) * mean_dem)
+    A_ub.append(row)
+    b_ub.append((1.0 - service_level_target) * total_demand)
         
     # 6. Inventory Balance (Equality constraints)
     # current_inventory + x_i - d_i,s = I_i,s - V_i,s
@@ -492,7 +567,10 @@ def solve_inventory_scipy_lp(
         "num_constraints": len(A_ub) + len(A_eq)
     }
     
-
+    if status == "Infeasible":
+        reason = diagnose_infeasibility(skus_df, budget_cap, capacity_cap, service_level_target, num_scenarios)
+        diagnostics["error_message"] = reason
+        
     return status, res.fun if res.success else None, recs_df, diagnostics
 
 def evaluate_reorder_policy(

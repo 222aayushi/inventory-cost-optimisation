@@ -172,13 +172,37 @@ st.sidebar.markdown(
 
 st.sidebar.markdown("---")
 
+# Initialize session state for default calibration values
+if "budget_val" not in st.session_state:
+    st.session_state.budget_val = 10000000.0
+if "capacity_val" not in st.session_state:
+    st.session_state.capacity_val = 5000.0
+if "service_val" not in st.session_state:
+    st.session_state.service_val = 95.0
+if "scenarios_val" not in st.session_state:
+    st.session_state.scenarios_val = 15
+if "scipy_val" not in st.session_state:
+    st.session_state.scipy_val = False
+
 # Solver Configuration parameters in Sidebar
 st.sidebar.subheader("System Configuration")
-budget_slider = st.sidebar.slider("Procurement Budget ($)", 20000.0, 150000.0, 80000.0, step=5000.0, format="$%d")
-capacity_slider = st.sidebar.slider("Warehouse Space (m³)", 50.0, 300.0, 150.0, step=10.0)
-service_slider = st.sidebar.slider("Service level target (%)", 80.0, 99.0, 95.0, step=1.0) / 100.0
-scenarios_slider = st.sidebar.slider("Stochastic Scenarios (SAA)", 5, 50, 15, step=5)
-use_scipy = st.sidebar.checkbox("Use LP relaxation (SciPy linprog)")
+budget_slider = st.sidebar.slider("Procurement Budget ($)", 1000000.0, 20000000.0, key="budget_val", step=500000.0, format="$%d")
+capacity_slider = st.sidebar.slider("Warehouse Space (m³)", 500.0, 10000.0, key="capacity_val", step=250.0)
+service_slider = st.sidebar.slider("Service level target (%)", 80.0, 99.0, key="service_val", step=1.0) / 100.0
+scenarios_slider = st.sidebar.slider("Stochastic Scenarios (SAA)", 5, 50, key="scenarios_val", step=5)
+use_scipy = st.sidebar.checkbox("Use LP relaxation (SciPy linprog)", key="scipy_val")
+
+# Reset Button
+if st.sidebar.button("Reset to Recommended Defaults"):
+    st.session_state.budget_val = 10000000.0
+    st.session_state.capacity_val = 5000.0
+    st.session_state.service_val = 95.0
+    st.session_state.scenarios_val = 15
+    st.session_state.scipy_val = False
+    st.rerun()
+
+st.sidebar.markdown("---")
+
 # Show Connection Status
 if mode == "API":
     st.sidebar.success(f"FastAPI Server Connected (SKUs in db: {health_data.get('skus_in_db')})")
@@ -211,10 +235,11 @@ def get_optimization_results(budget, capacity, service, num_scenarios, scipy_fla
         res = requests.post(f"{API_URL}/optimize", json=payload)
         if res.status_code == 200:
             data = res.json()
-            return data["status"], data["summary"], pd.DataFrame(data["recommendations"]), data["diagnostics"]
+            recs_df = pd.DataFrame(data["recommendations"]) if data["status"] == "Optimal" else None
+            return data["status"], data["summary"], recs_df, data["diagnostics"]
         else:
             err = res.json().get("detail", "Solver failed.")
-            return "Infeasible", None, None, {"error": err}
+            return "Infeasible", None, None, {"error_message": err}
     else:
         # Fallback local computation
         start_t = time.time()
@@ -228,7 +253,7 @@ def get_optimization_results(budget, capacity, service, num_scenarios, scipy_fla
             sol_type = "PuLP_MIP"
             
         if status != "Optimal" or obj is None:
-            return "Infeasible", None, None, {"error": "Solver could not find an optimal solution."}
+            return "Infeasible", None, None, diag
             
         # Baseline calculations
         baseline_qtys = {row["sku_id"]: max(0.0, row["mean_weekly_demand"] - row["current_inventory"]) for _, row in skus_df.iterrows()}
@@ -299,17 +324,18 @@ with st.spinner("Invoking Mixed-Integer Solver..."):
 # Handle Infeasibility
 if status == "Infeasible":
     st.error("⚠️ Solver Infeasibility Alert")
+    reason = diagnostics.get("error_message", "No detailed diagnostic reason available.")
     st.markdown(
-        "> [!IMPORTANT]\n"
-        "> The solver could not find a feasible solution with your current constraints. This typically happens when the target service level floor cannot be satisfied within the provided budget or storage space.\n\n"
+        f"> [!IMPORTANT]\n"
+        f"> **Diagnostic Reason:**\n"
+        f"> {reason}\n\n"
         "**Recommended Actions:**\n"
         "- Increase the Procurement Budget slider in the sidebar.\n"
         "- Lower the Service Level Target floor in the sidebar.\n"
         "- Increase the Warehouse Space capacity limit."
     )
-    if "error" in diagnostics:
-        st.info(f"Solver Error Diagnostic: {diagnostics['error']}")
     st.stop()
+
 # Layout Tabs
 tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Executive Summary", 

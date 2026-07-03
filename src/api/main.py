@@ -62,10 +62,10 @@ class RunSummary(BaseModel):
 class OptimizeResponse(BaseModel):
     run_id: str
     status: str
-    objective_value: Optional[float]
+    objective_value: Optional[float] = None
     diagnostics: Dict[str, Any]
-    summary: RunSummary
-    recommendations: List[SKURecommendationResponse]
+    summary: Optional[RunSummary] = None
+    recommendations: Optional[List[SKURecommendationResponse]] = None
 
 class AnomalyResponse(BaseModel):
     sku_id: str
@@ -143,10 +143,28 @@ def run_optimization(req: OptimizeRequest):
         solver_type = "PuLP_MIP"
         
     if status != "Optimal" or obj is None:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Solver failed to find an optimal solution. Status: {status}. Tighten service levels or increase budget/capacity."
+        run_id = OptimizationTracker.log_run(
+            solver_type=solver_type,
+            solver_status=status,
+            budget_cap=req.budget_cap,
+            capacity_cap=req.capacity_cap,
+            service_level_target=req.service_level_target,
+            total_holding_cost=0.0,
+            total_stockout_penalty=0.0,
+            total_cost=0.0,
+            savings_vs_base=0.0,
+            run_time_seconds=diag["runtime_seconds"],
+            recommendations_df=pd.DataFrame(columns=["sku_id", "recommended_order_qty", "reorder_flag", "expected_shortfall", "expected_holding_cost", "expected_stockout_cost"])
         )
+        return OptimizeResponse(
+            run_id=run_id,
+            status=status,
+            objective_value=None,
+            diagnostics=diag,
+            summary=None,
+            recommendations=None
+        )
+        
     # 3. Calculate heuristic baseline costs
     # Baseline policy: order what is needed to cover mean weekly demand: x_i = max(0, mean_demand - current_inv)
     baseline_qtys = {}
